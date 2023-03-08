@@ -28,23 +28,23 @@
 #define PORTENTA_H7_SLOW_PWM_ISR_GENERIC_IMPL_H
 
 #include <string.h>
-
+#include <Arduino_MachineControl.h>
 ///////////////////////////////////////////////////
-
+// using namespace machineControl;
 
 uint64_t timeNow()
 {
 #if USING_MICROS_RESOLUTION
-  return ( (uint64_t) micros() );
+  return ((uint64_t)micros());
 #else
-  return ( (uint64_t) millis() );
+  return ((uint64_t)millis());
 #endif
 }
 
 ///////////////////////////////////////////////////
 
 Portenta_H7_Slow_PWM_ISR::Portenta_H7_Slow_PWM_ISR()
-  : numChannels (-1)
+    : numChannels(-1)
 {
 }
 
@@ -56,9 +56,9 @@ void Portenta_H7_Slow_PWM_ISR::init()
 
   for (uint8_t channelNum = 0; channelNum < MAX_NUMBER_CHANNELS; channelNum++)
   {
-    memset((void*) &PWM[channelNum], 0, sizeof (PWM_t));
+    memset((void *)&PWM[channelNum], 0, sizeof(PWM_t));
     PWM[channelNum].prevTime = currentTime;
-    PWM[channelNum].pin      = INVALID_PORTENTA_H7_PIN;
+    PWM[channelNum].pin = INVALID_PORTENTA_H7_PIN;
   }
 
   numChannels = 0;
@@ -77,56 +77,53 @@ void Portenta_H7_Slow_PWM_ISR::run()
     // end dutyCycle =>  digitalWrite LOW
     if (PWM[channelNum].enabled)
     {
-      if ( (uint32_t) (currentTime - PWM[channelNum].prevTime) <= PWM[channelNum].onTime )
+      if ((uint32_t)(currentTime - PWM[channelNum].prevTime) <= PWM[channelNum].onTime)
       {
         if (!PWM[channelNum].pinHigh)
         {
-          digitalWrite(PWM[channelNum].pin, HIGH);
+          machinecontrol::digital_outputs.set(PWM[channelNum].pin, HIGH);
           PWM[channelNum].pinHigh = true;
 
           // callbackStart
           if (PWM[channelNum].callbackStart != nullptr)
           {
-            (*(timer_callback) PWM[channelNum].callbackStart)();
+            (*(timer_callback)PWM[channelNum].callbackStart)();
           }
         }
       }
-      else if ( (uint32_t) (currentTime - PWM[channelNum].prevTime) < PWM[channelNum].period )
+      else if ((uint32_t)(currentTime - PWM[channelNum].prevTime) < PWM[channelNum].period)
       {
         if (PWM[channelNum].pinHigh)
         {
-          digitalWrite(PWM[channelNum].pin, LOW);
+          machinecontrol::digital_outputs.set(PWM[channelNum].pin, LOW);
           PWM[channelNum].pinHigh = false;
 
           // callback when PWM pulse stops (LOW)
           if (PWM[channelNum].callbackStop != nullptr)
           {
-            (*(timer_callback) PWM[channelNum].callbackStop)();
+            (*(timer_callback)PWM[channelNum].callbackStop)();
           }
         }
       }
-      //else
-      else if ( (uint32_t) (currentTime - PWM[channelNum].prevTime) >= PWM[channelNum].period )
+      // else
+      else if ((uint32_t)(currentTime - PWM[channelNum].prevTime) >= PWM[channelNum].period)
       {
         PWM[channelNum].prevTime = currentTime;
 
 #if CHANGING_PWM_END_OF_CYCLE
-
         // Only update whenever having newPeriod
         if (PWM[channelNum].newPeriod != 0)
         {
-          PWM[channelNum].period    = PWM[channelNum].newPeriod;
+          PWM[channelNum].period = PWM[channelNum].newPeriod;
           PWM[channelNum].newPeriod = 0;
 
-          PWM[channelNum].onTime  = PWM[channelNum].newOnTime;
+          PWM[channelNum].onTime = PWM[channelNum].newOnTime;
         }
-
 #endif
       }
     }
   }
 }
-
 
 ///////////////////////////////////////////////////
 
@@ -143,7 +140,7 @@ int Portenta_H7_Slow_PWM_ISR::findFirstFreeSlot()
   // return the first slot with no callbackStart (i.e. free)
   for (uint8_t channelNum = 0; channelNum < MAX_NUMBER_CHANNELS; channelNum++)
   {
-    if ( (PWM[channelNum].period == 0) && !PWM[channelNum].enabled )
+    if ((PWM[channelNum].period == 0) && !PWM[channelNum].enabled)
     {
       return channelNum;
     }
@@ -155,13 +152,12 @@ int Portenta_H7_Slow_PWM_ISR::findFirstFreeSlot()
 
 ///////////////////////////////////////////////////
 
-int Portenta_H7_Slow_PWM_ISR::setupPWMChannel(const uint32_t& pin, const uint32_t& period, const float& dutycycle,
-                                              void* cbStartFunc, void* cbStopFunc)
+int Portenta_H7_Slow_PWM_ISR::setupPWMChannel(const uint32_t &pin, const uint32_t &period, const float &dutycycle, void *cbStartFunc, void *cbStopFunc)
 {
   int channelNum;
 
   // Invalid input, such as period = 0, etc
-  if ( (period == 0) || (dutycycle < 0.0) || (dutycycle > 100.0) )
+  if ((period == 0) || (dutycycle < 0.0) || (dutycycle > 100.0))
   {
     PWM_LOGERROR("Error: Invalid period or dutycycle");
     return -1;
@@ -179,22 +175,22 @@ int Portenta_H7_Slow_PWM_ISR::setupPWMChannel(const uint32_t& pin, const uint32_
     return -1;
   }
 
-  PWM[channelNum].pin           = pin;
-  PWM[channelNum].period        = period;
+  PWM[channelNum].pin = pin;
+  PWM[channelNum].period = period;
 
   // Must be 0 for new PWM channel
-  PWM[channelNum].newPeriod     = 0;
+  PWM[channelNum].newPeriod = 0;
 
-  PWM[channelNum].onTime        = ( period * dutycycle ) / 100;
+  PWM[channelNum].onTime = (period * dutycycle) / 100;
 
   pinMode(pin, OUTPUT);
-  digitalWrite(pin, HIGH);
-  PWM[channelNum].pinHigh       = true;
+  machinecontrol::digital_outputs.set(pin, HIGH);
+  PWM[channelNum].pinHigh = true;
 
-  PWM[channelNum].prevTime      = timeNow();
+  PWM[channelNum].prevTime = timeNow();
 
   PWM[channelNum].callbackStart = cbStartFunc;
-  PWM[channelNum].callbackStop  = cbStopFunc;
+  PWM[channelNum].callbackStop = cbStopFunc;
 
   PWM_LOGINFO0("Channel : ");
   PWM_LOGINFO0(channelNum);
@@ -207,18 +203,17 @@ int Portenta_H7_Slow_PWM_ISR::setupPWMChannel(const uint32_t& pin, const uint32_
 
   numChannels++;
 
-  PWM[channelNum].enabled      = true;
+  PWM[channelNum].enabled = true;
 
   return channelNum;
 }
 
 ///////////////////////////////////////////////////
 
-bool Portenta_H7_Slow_PWM_ISR::modifyPWMChannel_Period(const uint8_t& channelNum, const uint32_t& pin,
-                                                       const uint32_t& period, const float& dutycycle)
+bool Portenta_H7_Slow_PWM_ISR::modifyPWMChannel_Period(const uint8_t &channelNum, const uint32_t &pin, const uint32_t &period, const float &dutycycle)
 {
   // Invalid input, such as period = 0, etc
-  if ( (period == 0) || (dutycycle < 0.0) || (dutycycle > 100.0) )
+  if ((period == 0) || (dutycycle < 0.0) || (dutycycle > 100.0))
   {
     PWM_LOGERROR("Error: Invalid period or dutycycle");
     return false;
@@ -238,9 +233,9 @@ bool Portenta_H7_Slow_PWM_ISR::modifyPWMChannel_Period(const uint8_t& channelNum
 
 #if CHANGING_PWM_END_OF_CYCLE
 
-  PWM[channelNum].newPeriod     = period;
-  PWM[channelNum].newDutyCycle  = dutycycle;
-  PWM[channelNum].newOnTime     = ( period * dutycycle ) / 100;
+  PWM[channelNum].newPeriod = period;
+  PWM[channelNum].newDutyCycle = dutycycle;
+  PWM[channelNum].newOnTime = (period * dutycycle) / 100;
 
   PWM_LOGINFO0("Channel : ");
   PWM_LOGINFO0(channelNum);
@@ -253,14 +248,14 @@ bool Portenta_H7_Slow_PWM_ISR::modifyPWMChannel_Period(const uint8_t& channelNum
 
 #else
 
-  PWM[channelNum].period        = period;
+  PWM[channelNum].period = period;
 
-  PWM[channelNum].onTime        = ( period * dutycycle ) / 100;
+  PWM[channelNum].onTime = (period * dutycycle) / 100;
 
-  digitalWrite(pin, HIGH);
-  PWM[channelNum].pinHigh       = true;
+  machinecontrol::digital_outputs.set(pin, HIGH);
+  PWM[channelNum].pinHigh = true;
 
-  PWM[channelNum].prevTime      = timeNow();
+  PWM[channelNum].prevTime = timeNow();
 
   PWM_LOGINFO0("Channel : ");
   PWM_LOGINFO0(channelNum);
@@ -276,21 +271,20 @@ bool Portenta_H7_Slow_PWM_ISR::modifyPWMChannel_Period(const uint8_t& channelNum
   return true;
 }
 
-
 ///////////////////////////////////////////////////
 
-void Portenta_H7_Slow_PWM_ISR::deleteChannel(const uint8_t& channelNum)
+void Portenta_H7_Slow_PWM_ISR::deleteChannel(const uint8_t &channelNum)
 {
   // nothing to delete if no timers are in use
-  if ( (channelNum >= MAX_NUMBER_CHANNELS) || (numChannels == 0) )
+  if ((channelNum >= MAX_NUMBER_CHANNELS) || (numChannels == 0))
   {
     return;
   }
 
   // don't decrease the number of timers if the specified slot is already empty (zero period, invalid)
-  if ( (PWM[channelNum].pin != INVALID_PORTENTA_H7_PIN) && (PWM[channelNum].period != 0) )
+  if ((PWM[channelNum].pin != INVALID_PORTENTA_H7_PIN) && (PWM[channelNum].period != 0))
   {
-    memset((void*) &PWM[channelNum], 0, sizeof (PWM_t));
+    memset((void *)&PWM[channelNum], 0, sizeof(PWM_t));
 
     PWM[channelNum].pin = INVALID_PORTENTA_H7_PIN;
 
@@ -302,7 +296,7 @@ void Portenta_H7_Slow_PWM_ISR::deleteChannel(const uint8_t& channelNum)
 ///////////////////////////////////////////////////
 
 // function contributed by code@rowansimms.com
-void Portenta_H7_Slow_PWM_ISR::restartChannel(const uint8_t& channelNum)
+void Portenta_H7_Slow_PWM_ISR::restartChannel(const uint8_t &channelNum)
 {
   if (channelNum >= MAX_NUMBER_CHANNELS)
   {
@@ -314,7 +308,7 @@ void Portenta_H7_Slow_PWM_ISR::restartChannel(const uint8_t& channelNum)
 
 ///////////////////////////////////////////////////
 
-bool Portenta_H7_Slow_PWM_ISR::isEnabled(const uint8_t& channelNum)
+bool Portenta_H7_Slow_PWM_ISR::isEnabled(const uint8_t &channelNum)
 {
   if (channelNum >= MAX_NUMBER_CHANNELS)
   {
@@ -326,7 +320,7 @@ bool Portenta_H7_Slow_PWM_ISR::isEnabled(const uint8_t& channelNum)
 
 ///////////////////////////////////////////////////
 
-void Portenta_H7_Slow_PWM_ISR::enable(const uint8_t& channelNum)
+void Portenta_H7_Slow_PWM_ISR::enable(const uint8_t &channelNum)
 {
   if (channelNum >= MAX_NUMBER_CHANNELS)
   {
@@ -338,7 +332,7 @@ void Portenta_H7_Slow_PWM_ISR::enable(const uint8_t& channelNum)
 
 ///////////////////////////////////////////////////
 
-void Portenta_H7_Slow_PWM_ISR::disable(const uint8_t& channelNum)
+void Portenta_H7_Slow_PWM_ISR::disable(const uint8_t &channelNum)
 {
   if (channelNum >= MAX_NUMBER_CHANNELS)
   {
@@ -379,7 +373,7 @@ void Portenta_H7_Slow_PWM_ISR::disableAll()
 
 ///////////////////////////////////////////////////
 
-void Portenta_H7_Slow_PWM_ISR::toggle(const uint8_t& channelNum)
+void Portenta_H7_Slow_PWM_ISR::toggle(const uint8_t &channelNum)
 {
   if (channelNum >= MAX_NUMBER_CHANNELS)
   {
@@ -396,5 +390,4 @@ int8_t Portenta_H7_Slow_PWM_ISR::getnumChannels()
   return numChannels;
 }
 
-#endif    // PORTENTA_H7_SLOW_PWM_ISR_GENERIC_IMPL_H
-
+#endif // PORTENTA_H7_SLOW_PWM_ISR_GENERIC_IMPL_H
